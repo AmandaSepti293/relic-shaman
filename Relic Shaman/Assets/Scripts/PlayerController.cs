@@ -84,7 +84,7 @@ public class PlayerController : MonoBehaviour
 
     //Input Variables
     private float xAxis, yAxis;
-    private bool attack = false;
+    bool attack = false;
 
 
     //creates a singleton of the PlayerController
@@ -145,26 +145,23 @@ public class PlayerController : MonoBehaviour
         attack = Input.GetMouseButtonDown(0);
     }
 
-    void Flip()
-    {
-        if (xAxis < 0)
-        {
-            transform.localScale = new Vector2(-1, transform.localScale.y);
-            pState.lookingRight = false;
-        }
-        else if (xAxis > 0)
-        {
-            transform.localScale = new Vector2(1, transform.localScale.y);
-            pState.lookingRight = true; 
-        }
-    }
-
     private void Move()
     {
         rb.velocity = new Vector2(walkSpeed * xAxis, rb.velocity.y);
         anim.SetBool("Walking", rb.velocity.x != 0 && Grounded());
     }
 
+    void Flip()
+    {
+        if (xAxis < 0)
+        {
+            transform.localScale = new Vector3(-1, 1, 1);
+        }
+        else if (xAxis > 0)
+        {
+            transform.localScale = new Vector3(1, 1, 1);
+        }
+    }
     void StartDash()
     {
         if(Input.GetButtonDown("Dash") && canDash && !dashed)
