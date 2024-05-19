@@ -4,7 +4,7 @@
 PlayerSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 26
-  productGUID: 491f17ff6d7c4bf4aa8e20457b99c333
+  productGUID: 2efdd0f44656dfa4f8658240337506ca
   AndroidProfiler: 0
   AndroidFilterTouchesWhenObscured: 0
   AndroidEnableSustainedPerformanceMode: 0
@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: DefaultCompany
-  productName: Relic Shaman
+  productName: Metroidvania
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -721,14 +721,14 @@ PlayerSettings:
   apiCompatibilityLevelPerPlatform: {}
   m_RenderingPath: 1
   m_MobileRenderingPath: 1
-  metroPackageName: Relic Shaman
+  metroPackageName: Metroidvania
   metroPackageVersion: 
   metroCertificatePath: 
   metroCertificatePassword: 
   metroCertificateSubject: 
   metroCertificateIssuer: 
   metroCertificateNotAfter: 0000000000000000
-  metroApplicationDescription: Relic Shaman
+  metroApplicationDescription: Metroidvania
   wsaImages: {}
   metroTileShortName: 
   metroTileShowName: 0
@@ -796,10 +796,10 @@ PlayerSettings:
   apiCompatibilityLevel: 6
   activeInputHandler: 0
   windowsGamepadBackendHint: 0
-  cloudProjectId: 6ebf2d5c-fc39-4662-b7f1-48c9be4c81d4
+  cloudProjectId: 6e041891-fc55-408f-8457-4a689437c38b
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: Relic Shaman
+  projectName: Metroidvania
   organizationId: amanda-septi
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
