@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 public class PlayerController : MonoBehaviour
 {
@@ -17,7 +19,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int jumpBufferFrames; //sets the max amount of frames the jump buffer input is stored
 
     private float coyoteTimeCounter = 0; //stores the Grounded() bool
-    [SerializeField] private float coyoteTime; //sets the max amount of frames the Grounded() bool is stored
+    [SerializeField] private float coyoteTime; ////sets the max amount of frames the Grounded() bool is stored
 
     private int airJumpCounter = 0; //keeps track of how many times the player has jumped in the air
     [SerializeField] private int maxAirJumps; //the max no. of air jumps
@@ -58,8 +60,7 @@ public class PlayerController : MonoBehaviour
 
     [SerializeField] private LayerMask attackableLayer; //the layer the player can attack and recoil off of
 
-    [SerializeField] private float timeBetweenAttack;
-    private float timeSinceAttack;
+    private float timeBetweenAttack, timeSinceAttck;
 
     [SerializeField] private float damage; //the damage the player does to an enemy
 
@@ -69,25 +70,29 @@ public class PlayerController : MonoBehaviour
 
 
     [Header("Recoil Settings:")]
-     [SerializeField] private int recoilXSteps = 5; //how many FixedUpdates() the player recoils horizontally for
-    [SerializeField] private int recoilYSteps = 5; //how many FixedUpdates() the player recoils vertically for 
+    [SerializeField] private int recoilXSteps = 5; //how many FixedUpdates() the player recoils horizontally for
+    [SerializeField] private int recoilYSteps = 5; //how many FixedUpdates() the player recoils vertically for
 
     [SerializeField] private float recoilXSpeed = 100; //the speed of horizontal recoil
     [SerializeField] private float recoilYSpeed = 100; //the speed of vertical recoil
 
-     private int stepsXRecoiled, stepsYRecoiled; //the no. of steps recoiled horizontally and verticall 
+    private int stepsXRecoiled, stepsYRecoiled; //the no. of steps recoiled horizontally and verticall
     [Space(5)]
 
-    private PlayerStateList pState;
+    [Header("Health Settings")]
+    public int health;
+    public int maxHealth;
+    [Space(5)]
+
+    [HideInInspector ] public PlayerStateList pState;
     private Animator anim;
     private Rigidbody2D rb;
 
     //Input Variables
     private float xAxis, yAxis;
-    bool attack = false;
+    private bool attack = false;
 
 
-    //creates a singleton of the PlayerController
     public static PlayerController Instance;
 
     private void Awake()
@@ -100,6 +105,7 @@ public class PlayerController : MonoBehaviour
         {
             Instance = this;
         }
+        health = maxHealth;
     }
 
 
@@ -135,6 +141,11 @@ public class PlayerController : MonoBehaviour
         Jump();
         StartDash();
         Attack();
+    }
+
+    private void FixedUpdate()
+    {
+        if (pState.dashing) return;
         Recoil();
     }
 
@@ -145,23 +156,26 @@ public class PlayerController : MonoBehaviour
         attack = Input.GetMouseButtonDown(0);
     }
 
+    void Flip()
+    {
+        if (xAxis < 0)
+        {
+            transform.localScale = new Vector2(-1, transform.localScale.y);
+            pState.lookingRight = false;
+        }
+        else if (xAxis > 0)
+        {
+            transform.localScale = new Vector2(1, transform.localScale.y);
+            pState.lookingRight = true; 
+        }
+    }
+
     private void Move()
     {
         rb.velocity = new Vector2(walkSpeed * xAxis, rb.velocity.y);
         anim.SetBool("Walking", rb.velocity.x != 0 && Grounded());
     }
 
-    void Flip()
-    {
-        if (xAxis < 0)
-        {
-            transform.localScale = new Vector3(-1, 1, 1);
-        }
-        else if (xAxis > 0)
-        {
-            transform.localScale = new Vector3(1, 1, 1);
-        }
-    }
     void StartDash()
     {
         if(Input.GetButtonDown("Dash") && canDash && !dashed)
@@ -193,10 +207,10 @@ public class PlayerController : MonoBehaviour
 
     void Attack()
     {
-        timeSinceAttack += Time.deltaTime;
-        if(attack && timeSinceAttack >= timeBetweenAttack)
+        timeSinceAttck += Time.deltaTime;
+        if(attack && timeSinceAttck >= timeBetweenAttack)
         {
-            timeSinceAttack = 0;
+            timeSinceAttck = 0;
             anim.SetTrigger("Attacking");
 
             if(yAxis == 0 || yAxis < 0 && Grounded())
@@ -221,19 +235,17 @@ public class PlayerController : MonoBehaviour
     void Hit(Transform _attackTransform, Vector2 _attackArea, ref bool _recoilDir, float _recoilStrength)
     {
         Collider2D[] objectsToHit = Physics2D.OverlapBoxAll(_attackTransform.position, _attackArea, 0, attackableLayer);
-        List<Enemy> hitEnemies = new List<Enemy>();
 
-         if(objectsToHit.Length > 0)
+        if(objectsToHit.Length > 0)
         {
             _recoilDir = true;
-        } 
+        }
         for(int i = 0; i < objectsToHit.Length; i++)
         {
-            Enemy e = objectsToHit[i].GetComponent<Enemy>();
-            if(e && !hitEnemies.Contains(e))
+            if (objectsToHit[i].GetComponent<Enemy>() != null)
             {
-                e.EnemyHit(damage, (transform.position - objectsToHit[i].transform.position).normalized, _recoilStrength);
-                hitEnemies.Add(e);
+                objectsToHit[i].GetComponent<Enemy>().EnemyHit
+                    (damage, (transform.position - objectsToHit[i].transform.position).normalized, _recoilStrength);
             }
         }
     }
@@ -275,7 +287,7 @@ public class PlayerController : MonoBehaviour
             rb.gravityScale = gravity;
         }
 
-         //stop recoil
+        //stop recoil
         if(pState.recoilingX && stepsXRecoiled < recoilXSteps)
         {
             stepsXRecoiled++;
@@ -296,7 +308,7 @@ public class PlayerController : MonoBehaviour
         if(Grounded())
         {
             StopRecoilY();
-        } 
+        }
     }
     void StopRecoilX()
     {
@@ -307,8 +319,24 @@ public class PlayerController : MonoBehaviour
     {
         stepsYRecoiled = 0;
         pState.recoilingY = false;
-    } 
-
+    }
+    public void TakeDamage(float _damage)
+    {
+        health -= Mathf.RoundToInt(_damage);
+        StartCoroutine(StopTakingDamage());
+    }
+    IEnumerator StopTakingDamage()
+    {
+        pState.invincible = true;
+        anim.SetTrigger("TakeDamage");
+        ClampHealth();
+        yield return new WaitForSeconds(1f);
+        pState.invincible = false;
+    }
+    void ClampHealth()
+    {
+        health = Mathf.Clamp(health, 0, maxHealth);
+    }
     public bool Grounded()
     {
         if (Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckY, whatIsGround) 
