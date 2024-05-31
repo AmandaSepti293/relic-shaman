@@ -7,7 +7,7 @@ public class Zombie : Enemy
     // Start is called before the first frame update
     void Start()
     {
-        rb.gravityScale = 12f;
+        rb.gravityScale = 12f;        
     }
     protected override void Awake()
     {
