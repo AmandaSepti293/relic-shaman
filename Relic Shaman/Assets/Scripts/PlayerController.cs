@@ -1,6 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using UnityEngine;
+using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 public class PlayerController : MonoBehaviour
 {
@@ -17,7 +20,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int jumpBufferFrames; //sets the max amount of frames the jump buffer input is stored
 
     private float coyoteTimeCounter = 0; //stores the Grounded() bool
-    [SerializeField] private float coyoteTime; //sets the max amount of frames the Grounded() bool is stored
+    [SerializeField] private float coyoteTime; ////sets the max amount of frames the Grounded() bool is stored
 
     private int airJumpCounter = 0; //keeps track of how many times the player has jumped in the air
     [SerializeField] private int maxAirJumps; //the max no. of air jumps
@@ -58,41 +61,77 @@ public class PlayerController : MonoBehaviour
 
     [SerializeField] private LayerMask attackableLayer; //the layer the player can attack and recoil off of
 
-    [SerializeField] private float timeBetweenAttack;
-    private float timeSinceAttack;
+    private float timeBetweenAttack, timeSinceAttck;
 
     [SerializeField] private float damage; //the damage the player does to an enemy
 
     [SerializeField] private GameObject slashEffect; //the effect of the slashs
+
+    bool restoreTime;
+    float restoreTimeSpeed;
     [Space(5)]
 
 
 
     [Header("Recoil Settings:")]
-     [SerializeField] private int recoilXSteps = 5; //how many FixedUpdates() the player recoils horizontally for
-    [SerializeField] private int recoilYSteps = 5; //how many FixedUpdates() the player recoils vertically for 
+    [SerializeField] private int recoilXSteps = 5; //how many FixedUpdates() the player recoils horizontally for
+    [SerializeField] private int recoilYSteps = 5; //how many FixedUpdates() the player recoils vertically for
 
     [SerializeField] private float recoilXSpeed = 100; //the speed of horizontal recoil
     [SerializeField] private float recoilYSpeed = 100; //the speed of vertical recoil
 
-     private int stepsXRecoiled, stepsYRecoiled; //the no. of steps recoiled horizontally and verticall 
+    private int stepsXRecoiled, stepsYRecoiled; //the no. of steps recoiled horizontally and verticall
     [Space(5)]
 
-    private PlayerStateList pState;
+    [Header("Health Settings")]
+    public int health;
+    public int maxHealth;
+    [SerializeField] GameObject bloodSpurt;
+    [SerializeField] float hitFlashSpeed;
+    public delegate void OnHealthChangedDelegate();
+    [HideInInspector] public OnHealthChangedDelegate onHealthChangedCallback;
+
+    float healTimer;
+    [SerializeField] float timeToHeal;
+    [Space(5)]
+
+    [Header("Mana Settings")]
+    [SerializeField] UnityEngine.UI.Image manaStorage;
+
+    [SerializeField] float mana;
+    [SerializeField] float manaDrainSpeed;
+    [SerializeField] float manaGain;
+    [Space(5)]
+
+    [Header("Spell Settings")]
+    //spell stats
+    [SerializeField] float manaSpellCost = 0.3f;
+    [SerializeField] float timeBetweenCast = 0.5f;
+    float timeSinceCast;
+    [SerializeField] float spellDamage; //upspellexplosion and downspellfireball
+    [SerializeField] float downSpellForce; // desolate dive only
+    //spell cast objects
+    [SerializeField] GameObject sideSpellFireball;
+    [SerializeField] GameObject upSpellExplosion;
+    [SerializeField] GameObject downSpellFireball;
+    [Space(5)]
+
+
+    [HideInInspector] public PlayerStateList pState;
     private Animator anim;
     private Rigidbody2D rb;
+    private SpriteRenderer sr;
 
     //Input Variables
     private float xAxis, yAxis;
-    bool attack = false;
+    private bool attack = false;
 
 
-    //creates a singleton of the PlayerController
     public static PlayerController Instance;
 
     private void Awake()
     {
-        if(Instance != null && Instance != this)
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
         }
@@ -100,6 +139,7 @@ public class PlayerController : MonoBehaviour
         {
             Instance = this;
         }
+        Health = maxHealth;
     }
 
 
@@ -109,10 +149,14 @@ public class PlayerController : MonoBehaviour
         pState = GetComponent<PlayerStateList>();
 
         rb = GetComponent<Rigidbody2D>();
+        sr = GetComponent<SpriteRenderer>();
 
         anim = GetComponent<Animator>();
 
         gravity = rb.gravityScale;
+
+        Mana = mana;
+        manaStorage.fillAmount = Mana;
     }
 
     private void OnDrawGizmos()
@@ -135,6 +179,22 @@ public class PlayerController : MonoBehaviour
         Jump();
         StartDash();
         Attack();
+        RestoreTimeScale();
+        FlashWhileInvincible();
+        Heal();
+        CastSpell();
+    }
+    private void OnTriggerEnter2D(Collider2D _other) //for up and down cast spell
+    {
+        if(_other.GetComponent<Enemy>() != null && pState.casting)
+        {
+            _other.GetComponent<Enemy>().EnemyHit(spellDamage, (_other.transform.position - transform.position).normalized, -recoilYSpeed);
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        if (pState.dashing) return;
         Recoil();
     }
 
@@ -142,7 +202,21 @@ public class PlayerController : MonoBehaviour
     {
         xAxis = Input.GetAxisRaw("Horizontal");
         yAxis = Input.GetAxisRaw("Vertical");
-        attack = Input.GetMouseButtonDown(0);
+        attack = Input.GetButtonDown("Attack");
+    }
+
+    void Flip()
+    {
+        if (xAxis < 0)
+        {
+            transform.localScale = new Vector2(-1, transform.localScale.y);
+            pState.lookingRight = false;
+        }
+        else if (xAxis > 0)
+        {
+            transform.localScale = new Vector2(1, transform.localScale.y);
+            pState.lookingRight = true;
+        }
     }
 
     private void Move()
@@ -151,20 +225,9 @@ public class PlayerController : MonoBehaviour
         anim.SetBool("Walking", rb.velocity.x != 0 && Grounded());
     }
 
-    void Flip()
-    {
-        if (xAxis < 0)
-        {
-            transform.localScale = new Vector3(-1, 1, 1);
-        }
-        else if (xAxis > 0)
-        {
-            transform.localScale = new Vector3(1, 1, 1);
-        }
-    }
     void StartDash()
     {
-        if(Input.GetButtonDown("Dash") && canDash && !dashed)
+        if (Input.GetButtonDown("Dash") && canDash && !dashed)
         {
             StartCoroutine(Dash());
             dashed = true;
@@ -193,18 +256,18 @@ public class PlayerController : MonoBehaviour
 
     void Attack()
     {
-        timeSinceAttack += Time.deltaTime;
-        if(attack && timeSinceAttack >= timeBetweenAttack)
+        timeSinceAttck += Time.deltaTime;
+        if (attack && timeSinceAttck >= timeBetweenAttack)
         {
-            timeSinceAttack = 0;
+            timeSinceAttck = 0;
             anim.SetTrigger("Attacking");
 
-            if(yAxis == 0 || yAxis < 0 && Grounded())
+            if (yAxis == 0 || yAxis < 0 && Grounded())
             {
                 Hit(SideAttackTransform, SideAttackArea, ref pState.recoilingX, recoilXSpeed);
                 Instantiate(slashEffect, SideAttackTransform);
             }
-            else if(yAxis > 0)
+            else if (yAxis > 0)
             {
                 Hit(UpAttackTransform, UpAttackArea, ref pState.recoilingY, recoilYSpeed);
                 SlashEffectAtAngle(slashEffect, 80, UpAttackTransform);
@@ -215,25 +278,28 @@ public class PlayerController : MonoBehaviour
                 SlashEffectAtAngle(slashEffect, -90, DownAttackTransform);
             }
         }
-       
+
 
     }
     void Hit(Transform _attackTransform, Vector2 _attackArea, ref bool _recoilDir, float _recoilStrength)
     {
         Collider2D[] objectsToHit = Physics2D.OverlapBoxAll(_attackTransform.position, _attackArea, 0, attackableLayer);
-        List<Enemy> hitEnemies = new List<Enemy>();
 
-         if(objectsToHit.Length > 0)
+        if (objectsToHit.Length > 0)
         {
             _recoilDir = true;
-        } 
-        for(int i = 0; i < objectsToHit.Length; i++)
+        }
+        for (int i = 0; i < objectsToHit.Length; i++)
         {
-            Enemy e = objectsToHit[i].GetComponent<Enemy>();
-            if(e && !hitEnemies.Contains(e))
+            if (objectsToHit[i].GetComponent<Enemy>() != null)
             {
-                e.EnemyHit(damage, (transform.position - objectsToHit[i].transform.position).normalized, _recoilStrength);
-                hitEnemies.Add(e);
+                objectsToHit[i].GetComponent<Enemy>().EnemyHit
+                    (damage, (transform.position - objectsToHit[i].transform.position).normalized, _recoilStrength);
+
+                if (objectsToHit[i].CompareTag("Enemy"))
+                {
+                    Mana += manaGain;
+                }
             }
         }
     }
@@ -245,9 +311,9 @@ public class PlayerController : MonoBehaviour
     }
     void Recoil()
     {
-        if(pState.recoilingX)
+        if (pState.recoilingX)
         {
-            if(pState.lookingRight)
+            if (pState.lookingRight)
             {
                 rb.velocity = new Vector2(-recoilXSpeed, 0);
             }
@@ -257,11 +323,11 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        if(pState.recoilingY)
+        if (pState.recoilingY)
         {
             rb.gravityScale = 0;
             if (yAxis < 0)
-            {                
+            {
                 rb.velocity = new Vector2(rb.velocity.x, recoilYSpeed);
             }
             else
@@ -275,8 +341,8 @@ public class PlayerController : MonoBehaviour
             rb.gravityScale = gravity;
         }
 
-         //stop recoil
-        if(pState.recoilingX && stepsXRecoiled < recoilXSteps)
+        //stop recoil
+        if (pState.recoilingX && stepsXRecoiled < recoilXSteps)
         {
             stepsXRecoiled++;
         }
@@ -293,10 +359,10 @@ public class PlayerController : MonoBehaviour
             StopRecoilY();
         }
 
-        if(Grounded())
+        if (Grounded())
         {
             StopRecoilY();
-        } 
+        }
     }
     void StopRecoilX()
     {
@@ -307,7 +373,179 @@ public class PlayerController : MonoBehaviour
     {
         stepsYRecoiled = 0;
         pState.recoilingY = false;
-    } 
+    }
+    public void TakeDamage(float _damage)
+    {
+        Health -= Mathf.RoundToInt(_damage);
+        StartCoroutine(StopTakingDamage());
+    }
+    IEnumerator StopTakingDamage()
+    {
+        pState.invincible = true;
+        GameObject _bloodSpurtParticles = Instantiate(bloodSpurt, transform.position, Quaternion.identity);
+        Destroy(_bloodSpurtParticles, 1.5f);
+        anim.SetTrigger("TakeDamage");
+        yield return new WaitForSeconds(1f);
+        pState.invincible = false;
+    }
+    void FlashWhileInvincible()
+    {
+        sr.material.color = pState.invincible ? Color.Lerp(Color.white, Color.black, Mathf.PingPong(Time.time * hitFlashSpeed, 1.0f)) : Color.white;
+    }
+    void RestoreTimeScale()
+    {
+        if (restoreTime)
+        {
+            if (Time.timeScale < 1)
+            {
+                Time.timeScale += Time.deltaTime * restoreTimeSpeed;
+            }
+            else
+            {
+                Time.timeScale = 1;
+                restoreTime = false;
+            }
+        }
+    }
+    public void HitStopTime(float _newTimeScale, int _restoreSpeed, float _delay)
+    {
+        restoreTimeSpeed = _restoreSpeed;
+        if (_delay > 0)
+        {
+            StopCoroutine(StartTimeAgain(_delay));
+            StartCoroutine(StartTimeAgain(_delay));
+        }
+        else
+        {
+            restoreTime = true;
+        }
+        Time.timeScale = _newTimeScale;
+    }
+    IEnumerator StartTimeAgain(float _delay)
+    {
+        restoreTime = true;
+        yield return new WaitForSeconds(_delay);
+    }
+    public int Health
+    {
+        get { return health; }
+        set
+        {
+            if (health != value)
+            {
+                health = Mathf.Clamp(value, 0, maxHealth);
+
+                if (onHealthChangedCallback != null)
+                {
+                    onHealthChangedCallback.Invoke();
+                }
+            }
+        }
+    }
+    void Heal()
+    {
+        if (Input.GetButton("Healing") && Health < maxHealth && Mana > 0 && !pState.jumping && !pState.dashing)
+        {
+            pState.healing = true;
+            anim.SetBool("Healing", true);
+
+            //healing
+            healTimer += Time.deltaTime;
+            if (healTimer >= timeToHeal)
+            {
+                Health++;
+                healTimer = 0;
+            }
+
+            //drain mana
+            Mana -= Time.deltaTime * manaDrainSpeed;
+        }
+        else
+        {
+            pState.healing = false;
+            anim.SetBool("Healing", false);
+            healTimer = 0;
+        }
+    }
+    float Mana
+    {
+        get { return mana; }
+        set
+        {
+            //if mana stats change
+            if (mana != value)
+            {
+                mana = Mathf.Clamp(value, 0, 1);
+                manaStorage.fillAmount = Mana;
+            }
+        }
+    }
+
+    void CastSpell()
+    {
+        if (Input.GetButtonDown("CastSpell") && timeSinceCast >= timeBetweenCast && Mana >= manaSpellCost)
+        {
+            pState.casting = true;
+            timeSinceCast = 0;
+            StartCoroutine(CastCoroutine());
+        }
+        else
+        {
+            timeSinceCast += Time.deltaTime;
+        }
+
+        if(Grounded())
+        {
+            //disable downspell if on the ground
+            downSpellFireball.SetActive(false);
+        }
+        //if down spell is active, force player down until grounded
+        if(downSpellFireball.activeInHierarchy)
+        {
+            rb.velocity += downSpellForce * Vector2.down;
+        }
+    }
+    IEnumerator CastCoroutine()
+    {
+        anim.SetBool("Casting", true);
+        yield return new WaitForSeconds(0.15f);
+
+        //side cast
+        if (yAxis == 0 || (yAxis < 0 && Grounded()))
+        {
+            GameObject _fireBall = Instantiate(sideSpellFireball, SideAttackTransform.position, Quaternion.identity);
+
+            //flip fireball
+            if(pState.lookingRight)
+            {
+                _fireBall.transform.eulerAngles = Vector3.zero; // if facing right, fireball continues as per normal
+            }
+            else
+            {
+                _fireBall.transform.eulerAngles = new Vector2(_fireBall.transform.eulerAngles.x, 180); 
+                //if not facing right, rotate the fireball 180 deg
+            }
+            pState.recoilingX = true;
+        }
+
+        //up cast
+        else if( yAxis > 0)
+        {
+            Instantiate(upSpellExplosion, transform);
+            rb.velocity = Vector2.zero;
+        }
+
+        //down cast
+        else if(yAxis < 0 && !Grounded())
+        {
+            downSpellFireball.SetActive(true);
+        }
+
+        Mana -= manaSpellCost;
+        yield return new WaitForSeconds(0.35f);
+        anim.SetBool("Casting", false);
+        pState.casting = false;
+    }
 
     public bool Grounded()
     {
