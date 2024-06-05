@@ -9,6 +9,8 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Horizontal Movement Settings:")]
     [SerializeField] private float walkSpeed = 1; //sets the players movement speed on the ground
+    [SerializeField] private float RunSpeed = 1; //sets the players movement speed on the ground
+    bool Running = false;
     [Space(5)]
 
 
@@ -35,6 +37,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float groundCheckY = 0.2f; //how far down from ground chekc point is Grounded() checked
     [SerializeField] private float groundCheckX = 0.5f; //how far horizontally from ground chekc point to the edge of the player is
     [SerializeField] private LayerMask whatIsGround; //sets the ground layer
+    [SerializeField] bool isFalling = false;
     [Space(5)]
 
 
@@ -108,6 +111,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float manaSpellCost = 0.3f;
     [SerializeField] float timeBetweenCast = 0.5f;
     float timeSinceCast;
+    float castOrHealtimer;
     [SerializeField] float spellDamage; //upspellexplosion and downspellfireball
     [SerializeField] float downSpellForce; // desolate dive only
     //spell cast objects
@@ -172,14 +176,16 @@ public class PlayerController : MonoBehaviour
     {
         GetInputs();
         UpdateJumpVariables();
+        RestoreTimeScale();
 
         if (pState.dashing) return;
+        Run();
+        Animations();
         Flip();
         Move();
         Jump();
         StartDash();
         Attack();
-        RestoreTimeScale();
         FlashWhileInvincible();
         Heal();
         CastSpell();
@@ -203,6 +209,15 @@ public class PlayerController : MonoBehaviour
         xAxis = Input.GetAxisRaw("Horizontal");
         yAxis = Input.GetAxisRaw("Vertical");
         attack = Input.GetButtonDown("Attack");
+
+        if (Input.GetButton("Cast/Heal"))
+        {
+            castOrHealtimer += Time.deltaTime;
+        }
+        else
+        {
+            castOrHealtimer = 0;
+        }
     }
 
     void Flip()
@@ -221,10 +236,28 @@ public class PlayerController : MonoBehaviour
 
     private void Move()
     {
-        rb.velocity = new Vector2(walkSpeed * xAxis, rb.velocity.y);
-        anim.SetBool("Walking", rb.velocity.x != 0 && Grounded());
+        if (Running == false)
+        {
+            rb.velocity = new Vector2(walkSpeed * xAxis, rb.velocity.y);
+            anim.SetBool("Walking", rb.velocity.x != 0 && Grounded());
+        }
+        else if (Running == true)
+        {
+            rb.velocity = new Vector2(RunSpeed * xAxis, rb.velocity.y);
+            anim.SetBool("Walking", rb.velocity.x != 0 && Grounded());
+        }
     }
-
+    void Run()
+    {
+        if (Input.GetKeyDown(KeyCode.LeftControl) && Running == false)
+        {
+            Running = true;
+        }
+        else if (Input.GetKeyDown(KeyCode.LeftControl) && Running == true)
+        {
+            Running = false;
+        }
+    }
     void StartDash()
     {
         if (Input.GetButtonDown("Dash") && canDash && !dashed)
@@ -444,7 +477,7 @@ public class PlayerController : MonoBehaviour
     }
     void Heal()
     {
-        if (Input.GetButton("Healing") && Health < maxHealth && Mana > 0 && !pState.jumping && !pState.dashing)
+        if (Input.GetButton("Cast/Heal") && castOrHealtimer > 0.05f && Health < maxHealth && Mana > 0 && !pState.jumping && !pState.dashing)
         {
             pState.healing = true;
             anim.SetBool("Healing", true);
@@ -483,7 +516,7 @@ public class PlayerController : MonoBehaviour
 
     void CastSpell()
     {
-        if (Input.GetButtonDown("CastSpell") && timeSinceCast >= timeBetweenCast && Mana >= manaSpellCost)
+        if (Input.GetButtonUp("Cast/Heal") && castOrHealtimer <= 0.5f && timeSinceCast >= timeBetweenCast && Mana >= manaSpellCost)
         {
             pState.casting = true;
             timeSinceCast = 0;
@@ -527,22 +560,20 @@ public class PlayerController : MonoBehaviour
             }
             pState.recoilingX = true;
         }
-
         //up cast
         else if( yAxis > 0)
         {
             Instantiate(upSpellExplosion, transform);
             rb.velocity = Vector2.zero;
         }
-
         //down cast
         else if(yAxis < 0 && !Grounded())
         {
             downSpellFireball.SetActive(true);
         }
-
         Mana -= manaSpellCost;
         yield return new WaitForSeconds(0.35f);
+        Debug.Log("HEEELP");
         anim.SetBool("Casting", false);
         pState.casting = false;
     }
@@ -590,6 +621,14 @@ public class PlayerController : MonoBehaviour
         }
 
         anim.SetBool("Jumping", !Grounded());
+        if (rb.velocity.y < -0.1)
+        {
+            isFalling = true;
+        }
+        else
+        {
+            isFalling = false;
+        }
     }
 
     void UpdateJumpVariables()
@@ -613,5 +652,10 @@ public class PlayerController : MonoBehaviour
         {
             jumpBufferCounter--;
         }
+    }
+    void Animations()
+    {
+        anim.SetBool("isFalling", isFalling);
+        anim.SetBool("Running", Running);
     }
 }
