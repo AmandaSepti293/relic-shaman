@@ -1878,9 +1878,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5ee77eaf6e2c8d642a3f103a367468da, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  walkSpeed: 40
+  walkSpeed: 45
   RunSpeed: 75
-  jumpForce: 55
+  jumpForce: 60
   jumpBufferFrames: 8
   coyoteTime: 0.1
   maxAirJumps: 1
@@ -1892,8 +1892,8 @@ MonoBehaviour:
     m_Bits: 8
   isFalling: 0
   dashSpeed: 200
-  dashTime: 0.2
-  dashCooldown: 0
+  dashTime: 0.5
+  dashCooldown: 0.1
   dashEffect: {fileID: 5093545545012636907, guid: 178cd7ab6bd69b64fb814f6e85f670d9, type: 3}
   SideAttackTransform: {fileID: 8399763532369536074}
   SideAttackArea: {x: 10, y: 7}
@@ -1948,6 +1948,7 @@ MonoBehaviour:
   healing: 0
   attacking: 0
   casting: 0
+  cutScene: 0
 --- !u!1 &7970976277924376530
 GameObject:
   m_ObjectHideFlags: 0

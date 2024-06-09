@@ -143,7 +143,8 @@ public class PlayerController : MonoBehaviour
         {
             Instance = this;
         }
-        Health = maxHealth;
+        DontDestroyOnLoad(gameObject);
+        
     }
 
 
@@ -174,6 +175,7 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (pState.cutScene) return;
         GetInputs();
         UpdateJumpVariables();
         RestoreTimeScale();
@@ -200,6 +202,7 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (pState.cutScene) return;
         if (pState.dashing) return;
         Recoil();
     }
@@ -278,7 +281,8 @@ public class PlayerController : MonoBehaviour
         pState.dashing = true;
         anim.SetTrigger("Dashing");
         rb.gravityScale = 0;
-        rb.velocity = new Vector2(transform.localScale.x * dashSpeed, 0);
+        int _dir = pState.lookingRight ? 1 : -1;
+        rb.velocity = new Vector2(_dir * dashSpeed, 0);
         if (Grounded()) Instantiate(dashEffect, transform);
         yield return new WaitForSeconds(dashTime);
         rb.gravityScale = gravity;
@@ -286,7 +290,22 @@ public class PlayerController : MonoBehaviour
         yield return new WaitForSeconds(dashCooldown);
         canDash = true;
     }
+    public IEnumerator WalkintoNewScene(Vector2 _exitDir, float _delay)
+    {
+        if(_exitDir.y > 0)
+        {
+            rb.velocity = jumpForce * _exitDir;
+        }
 
+        if(_exitDir.x != 0)
+        {
+            xAxis = _exitDir.x > 0 ? 1 : -1;
+            Move();
+        }
+        Flip();
+        yield return new WaitForSeconds(_delay);
+        pState.cutScene = false;
+    }
     void Attack()
     {
         timeSinceAttck += Time.deltaTime;
@@ -594,26 +613,22 @@ public class PlayerController : MonoBehaviour
 
     void Jump()
     {
-
-        if (!pState.jumping)
+        if (jumpBufferCounter > 0 && coyoteTimeCounter > 0 && !pState.jumping)
         {
-            if (jumpBufferCounter > 0 && coyoteTimeCounter > 0)
-            {
-                rb.velocity = new Vector3(rb.velocity.x, jumpForce);
+            rb.velocity = new Vector3(rb.velocity.x, jumpForce);
 
-                pState.jumping = true;
-            }
-            else if(!Grounded() && airJumpCounter < maxAirJumps && Input.GetButtonDown("Jump"))
-            {
-                pState.jumping = true;
+            pState.jumping = true;
+        }
+        if(!Grounded() && airJumpCounter < maxAirJumps && Input.GetButtonDown("Jump"))
+        {
+            pState.jumping = true;
 
-                airJumpCounter++;
+            airJumpCounter++;
 
-                rb.velocity = new Vector3(rb.velocity.x, jumpForce);
-            }
+            rb.velocity = new Vector3(rb.velocity.x, jumpForce);
         }
 
-        if (Input.GetButtonUp("Jump") && rb.velocity.y > 0)
+        if (Input.GetButtonUp("Jump") && rb.velocity.y > 3)
         {
             rb.velocity = new Vector2(rb.velocity.x, 0);
 
