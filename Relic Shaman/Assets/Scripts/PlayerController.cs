@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEngine.UI;
+using Unity.VisualScripting;
 
 public class PlayerController : MonoBehaviour
 {
@@ -26,6 +27,7 @@ public class PlayerController : MonoBehaviour
 
     private int airJumpCounter = 0; //keeps track of how many times the player has jumped in the air
     [SerializeField] private int maxAirJumps; //the max no. of air jumps
+    
 
     private float gravity; //stores the gravity scale at start
     [Space(5)]
@@ -120,11 +122,14 @@ public class PlayerController : MonoBehaviour
     [SerializeField] GameObject downSpellFireball;
     [Space(5)]
 
+    [Header("Camera Setuf")]
+    [SerializeField] private float playerFallSpeedTreshold;
+
 
     [HideInInspector] public PlayerStateList pState;
-    private Animator anim;
-    private Rigidbody2D rb;
-    private SpriteRenderer sr;
+    public Animator anim;
+    public Rigidbody2D rb;
+    public SpriteRenderer sr;
 
     //Input Variables
     private float xAxis, yAxis;
@@ -176,21 +181,30 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         if (pState.cutScene) return;
-        GetInputs();
+        if (pState.alive)
+        {
+             GetInputs();
+        }
+       
         UpdateJumpVariables();
         RestoreTimeScale();
+        UpdateCameraYDampForPlayerFall();
 
-        if (pState.dashing) return;
-        Run();
-        Animations();
-        Flip();
-        Move();
-        Jump();
-        StartDash();
-        Attack();
+        if (pState.dashing || pState.healing) return;
+        if (pState.alive)
+        {
+            Run();
+            Animations();
+            Flip();
+            Move();
+            Jump();
+            StartDash();
+            Attack();
+            Heal();
+            CastSpell();
+        }
+       
         FlashWhileInvincible();
-        Heal();
-        CastSpell();
     }
     private void OnTriggerEnter2D(Collider2D _other) //for up and down cast spell
     {
@@ -250,6 +264,19 @@ public class PlayerController : MonoBehaviour
             anim.SetBool("Walking", rb.velocity.x != 0 && Grounded());
         }
     }
+
+    void UpdateCameraYDampForPlayerFall()
+    {
+        if (rb.velocity.y < playerFallSpeedTreshold && !cameraManager.Instance.hasLerpingYDamping)
+        {
+            StartCoroutine(cameraManager.Instance.LerpYDamping(true));
+        }
+        if(rb.velocity.y >= 0 && !cameraManager.Instance.isLerpingYDamp && cameraManager.Instance.hasLerpingYDamping)
+        {
+           cameraManager.Instance.hasLerpingYDamping = false;
+           StartCoroutine(cameraManager.Instance.LerpYDamping(false)); 
+        }
+    }
     void Run()
     {
         if (Input.GetKeyDown(KeyCode.LeftControl) && Running == false)
@@ -304,6 +331,7 @@ public class PlayerController : MonoBehaviour
         }
         Flip();
         yield return new WaitForSeconds(_delay);
+        print("cutscene played");
         pState.cutScene = false;
     }
     void Attack()
@@ -316,37 +344,37 @@ public class PlayerController : MonoBehaviour
 
             if (yAxis == 0 || yAxis < 0 && Grounded())
             {
-                Hit(SideAttackTransform, SideAttackArea, ref pState.recoilingX, recoilXSpeed);
+                int _recoilLeftOrRight = pState.lookingRight ? 1 : -1;
+                Hit(SideAttackTransform, SideAttackArea, ref pState.recoilingX, Vector2.right * _recoilLeftOrRight, recoilXSpeed);
                 Instantiate(slashEffect, SideAttackTransform);
             }
             else if (yAxis > 0)
             {
-                Hit(UpAttackTransform, UpAttackArea, ref pState.recoilingY, recoilYSpeed);
+                Hit(UpAttackTransform, UpAttackArea, ref pState.recoilingY, Vector2.up, recoilYSpeed);
                 SlashEffectAtAngle(slashEffect, 80, UpAttackTransform);
             }
             else if (yAxis < 0 && !Grounded())
             {
-                Hit(DownAttackTransform, DownAttackArea, ref pState.recoilingY, recoilYSpeed);
+                Hit(DownAttackTransform, DownAttackArea, ref pState.recoilingY, Vector2.down, recoilYSpeed);
                 SlashEffectAtAngle(slashEffect, -90, DownAttackTransform);
             }
         }
 
 
     }
-    void Hit(Transform _attackTransform, Vector2 _attackArea, ref bool _recoilDir, float _recoilStrength)
+    void Hit(Transform _attackTransform, Vector2 _attackArea, ref bool _recoilBool, Vector2 _recoilDir, float _recoilStrength)
     {
         Collider2D[] objectsToHit = Physics2D.OverlapBoxAll(_attackTransform.position, _attackArea, 0, attackableLayer);
 
         if (objectsToHit.Length > 0)
         {
-            _recoilDir = true;
+            _recoilBool = true;
         }
         for (int i = 0; i < objectsToHit.Length; i++)
         {
             if (objectsToHit[i].GetComponent<Enemy>() != null)
             {
-                objectsToHit[i].GetComponent<Enemy>().EnemyHit
-                    (damage, (transform.position - objectsToHit[i].transform.position).normalized, _recoilStrength);
+                objectsToHit[i].GetComponent<Enemy>().EnemyHit(damage, _recoilDir, _recoilStrength);
 
                 if (objectsToHit[i].CompareTag("Enemy"))
                 {
@@ -428,8 +456,20 @@ public class PlayerController : MonoBehaviour
     }
     public void TakeDamage(float _damage)
     {
-        Health -= Mathf.RoundToInt(_damage);
-        StartCoroutine(StopTakingDamage());
+        if(pState.alive)
+        {
+            Health -= Mathf.RoundToInt(_damage);
+            if(Health <= 0)
+            {
+                Health = 0;
+                StartCoroutine(Death());
+            }
+            else
+            {
+                StartCoroutine(StopTakingDamage());
+            }
+            
+        }
     }
     IEnumerator StopTakingDamage()
     {
@@ -472,6 +512,28 @@ public class PlayerController : MonoBehaviour
             restoreTime = true;
         }
         Time.timeScale = _newTimeScale;
+    }
+
+    IEnumerator Death()
+    {
+        pState.alive = false;
+        Time.timeScale = 1f;
+        GameObject _bloodSpurtParticles = Instantiate(bloodSpurt, transform.position, Quaternion.identity);
+        Destroy(_bloodSpurtParticles, 1.5f);
+        anim.SetTrigger("Death");
+
+        yield return new WaitForSeconds(0.9f);
+        StartCoroutine(UIManager.Instance.ActivateDeathScreen());
+
+    }
+    public void Respawned()
+    {
+        if(!pState.alive)
+        {
+            pState.alive = true;
+            Health = maxHealth;
+            anim.Play("Joko_Idle");
+        }
     }
     IEnumerator StartTimeAgain(float _delay)
     {

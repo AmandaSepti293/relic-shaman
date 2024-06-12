@@ -13,4 +13,5 @@ public class PlayerStateList : MonoBehaviour
     public bool attacking;
     public bool casting;
     public bool cutScene = false;
+    public bool alive;
 }
